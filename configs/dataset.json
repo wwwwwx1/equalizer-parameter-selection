@@ -1,0 +1,17 @@
+{
+  "channel_dir": "",
+  "result_dir": "",
+  "result_pattern": "grid_*.mat",
+  "output_dir": "data/prepared",
+  "fields": {
+    "channel": "h_vary",
+    "channel_name": "currName",
+    "snr": "currSNR",
+    "mu": "param_delt",
+    "N1": "param_N1",
+    "N2": "param_N2",
+    "coded_mc": "coded_ber_after_mc"
+  },
+  "hdf5_matlab_order": true,
+  "expected_candidates": 294
+}

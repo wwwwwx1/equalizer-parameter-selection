@@ -1,0 +1,24 @@
+{
+  "matlab_exe": "",
+  "prediction_script": "matlab_integration/templates/prediction.m",
+  "grid_script": "matlab_integration/templates/grid.m",
+  "dependency_dir": "matlab_integration/dependencies",
+  "center": 501,
+  "mc": 25,
+  "seed": 22,
+  "parallel": false,
+  "save_options": {
+    "mc_coded": true,
+    "mc_decoded": true,
+    "mse": true,
+    "channel_H": true,
+    "symbols": true,
+    "tables": true,
+    "summary": true,
+    "csv": false,
+    "all_workspace": false,
+    "extra_variables": [],
+    "mat_version": "-v7.3",
+    "xlsx": false
+  }
+}

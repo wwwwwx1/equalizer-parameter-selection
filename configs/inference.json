@@ -1,0 +1,5 @@
+{
+  "checkpoint": "outputs/new_training/model.pt",
+  "target_metric": "MeanCodedBER",
+  "label": "MeanCodedBER · 4层时间网络（需先训练）"
+}
