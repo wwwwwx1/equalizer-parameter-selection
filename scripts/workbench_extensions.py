@@ -21,8 +21,9 @@ DESCRIPTIONS={'layers':'时间Transformer层数','d_model':'每个时间token的
 
 def validate_model_config(c):
     m,t,d=c['model'],c['training'],c['data']
-    for value in [m[k] for k in ('layers','d_model','heads','ffn_dim','delay_bins','candidate_dim')]+[t['epochs'],t['batch_size'],d['temporal_pool']]:
+    for value in [m[k] for k in ('d_model','heads','ffn_dim','delay_bins','candidate_dim')]+[t['epochs'],t['batch_size'],d['temporal_pool']]:
         if not isinstance(value,int) or isinstance(value,bool) or value<1:raise ValueError('层数、维度、头数、轮数、批次和池化长度需要正整数。')
+    if not isinstance(m['layers'],int) or isinstance(m['layers'],bool) or m['layers']<0:raise ValueError('时间层数必须为非负整数。')
     if m['d_model']%2 or m['d_model']%m['heads']:raise ValueError('d_model需要是偶数，且能被heads整除。')
     if not 0<=m['dropout']<1:raise ValueError('dropout应在[0,1)。')
     if m['kind'] not in ('scorer','classifier'):raise ValueError('model.kind应为scorer或classifier。')

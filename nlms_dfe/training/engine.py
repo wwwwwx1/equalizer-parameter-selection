@@ -40,7 +40,7 @@ def run_model(model, batch):
 def collect_predictions(model, loader, device):
     model.eval()
     scores, costs, ids, groups = [], [], [], []
-    progress=Progress('模型拟合评估',len(loader.dataset))
+    progress=Progress('模型评估',len(loader.dataset))
     progress.update(0,'开始读取评估批次',force=True)
     for batch in loader:
         prediction = run_model(model, to_device(batch, device)).float().cpu().numpy()
@@ -164,7 +164,7 @@ def train(config):
             if all_data:
                 # 不把训练集当验证集选模。按预先设定轮数训练，导出最终轮。
                 if epoch + 1 == settings['epochs']:
-                    metrics['scope'] = '全量训练的拟合指标；没有验证/测试集，不能代表新信道性能。'
+                    metrics['scope'] = f'{len(rows)}样本全量训练的拟合指标；没有验证/测试集，不能代表新信道性能。'
                     metrics['target_metric'] = settings.get('target_metric', 'MeanDecodedBER')
                     torch.save({'state_dict':model.state_dict(), 'config':config, 'candidates':torch.tensor(candidates),
                                 'candidate_ids':torch.tensor(ids), 'fixed_index':fixed, 'epoch':epoch+1,
@@ -210,7 +210,7 @@ def evaluate(checkpoint_path, output_path):
         raise ValueError("评估输出目录非空，请使用新目录保留历史结果。")
     model, checkpoint = load_checkpoint(checkpoint_path)
     if checkpoint.get('training_mode') == 'all_data':
-        raise ValueError('此模型使用了全部训练信道，无保留测试集。请用predict预测新信道，再进行独立均衡仿真。')
+        raise ValueError('此模型使用了全部110信道，无保留测试集。请用predict预测新信道，再进行独立均衡仿真。')
     config = checkpoint["config"]
     rows = load_manifest(project_path(config["data"]["manifest"]))
     if rows != checkpoint["manifest_snapshot"]:

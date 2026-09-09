@@ -7,6 +7,9 @@ from nlms_dfe.progress import event
 
 def run(job):
     action=job['action']
+    if action=='ablation':
+        from scripts.ablation_workbench import run as run_ablation
+        return run_ablation(job)
     if action=='matlab_simulation':
         from scripts.matlab_bridge import run_matlab
         return run_matlab(job)
@@ -29,7 +32,17 @@ def run(job):
     if action=='train':
         from nlms_dfe.training.engine import train
         config=job['config']
+        if job.get('split_ratio'):
+            from nlms_dfe.data.splitting import write_split
+            output=project_path(config['training']['output'])
+            manifest=write_split(project_path(config['data']['manifest']),output.with_name(output.name+'_split'),config['training']['seed'])
+            config['data']['manifest']=str(manifest)
+            config['training']['mode']='holdout'
         checkpoint=train(config)
+        metrics=None
+        if config['training'].get('mode')=='holdout':
+            from nlms_dfe.training.engine import evaluate
+            metrics=evaluate(checkpoint,checkpoint.parent/'evaluation')
         try:relative=str(checkpoint.relative_to(ROOT))
         except ValueError:relative=str(checkpoint)
         if job.get('publish_model',True):
@@ -43,7 +56,7 @@ def run(job):
             warning=f'模型已保存，但出图失败：{error}'
             print(warning,flush=True)
         return {'action':action,'checkpoint':str(checkpoint),'output':str(checkpoint.parent),
-                'message':warning or '训练和出图完成；单信道、批量预测已切换为新模型。'}
+                'message':warning or (f"训练完成：独立测试BER={metrics['selected_ber_macro']:.6g}，固定参数BER={metrics['fixed_ber_macro']:.6g}；模型已用于预测。" if metrics else '训练和出图完成；单信道、批量预测已切换为新模型。')}
     if action=='single':
         import torch
         from scipy.io import savemat

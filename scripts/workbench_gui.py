@@ -71,10 +71,12 @@ class Workbench:
         self.log=tk.Text(logframe,height=13,wrap='word',font=('Microsoft YaHei UI',9),state='disabled')
         self.log.grid(row=0,column=0,sticky='nsew')
         scrollbar=ttk.Scrollbar(logframe,command=self.log.yview);scrollbar.grid(row=0,column=1,sticky='ns');self.log.configure(yscrollcommand=scrollbar.set)
-        ttk.Label(frame,text='训练页目前使用全部数据；fit是训练拟合。预测只推荐参数，不运行均衡器或计算新信道BER。').grid(row=6,column=0,columnspan=3,sticky='w',pady=(8,0))
+        ttk.Label(frame,text='训练页按来源组7:2:1划分；val是验证指标，训练结束评估测试集。预测只推荐参数，不运行均衡器或计算新信道BER。').grid(row=6,column=0,columnspan=3,sticky='w',pady=(8,0))
         root.after(100,self.poll)
         from scripts.workbench_extensions import install
         install(self)
+        from scripts.workbench_ablation import install as install_ablation
+        install_ablation(self)
         root.geometry(f"1100x{min(960,max(780,root.winfo_screenheight()-100))}")
 
     def entry(self,parent,row,label,var,kind=None):
@@ -114,7 +116,7 @@ class Workbench:
         for label,var in [('索引指向已裁剪信道',self.train_cropped),('允许短时间记录',self.train_short),('内存缓存特征（仅小数据集）',self.cache)]:
             ttk.Checkbutton(options,text=label,variable=var).pack(side='left',padx=(0,12))
         ttk.Button(p,text='读取配置并更新本页',command=self.load_train_config).grid(row=6,column=0,sticky='w',pady=4)
-        ttk.Label(p,text='数据已准备好时，可直接在本页训练；扫描、训练批次和拟合评估都会显示进度。').grid(row=6,column=1,columnspan=2,sticky='w')
+        ttk.Label(p,text='数据已准备好时，可直接在本页训练；自动按来源组7:2:1划分，显示扫描、训练和验证进度。').grid(row=6,column=1,columnspan=2,sticky='w')
         self.assign_config(self.config)
 
     def assign_config(self,c):
@@ -179,9 +181,9 @@ class Workbench:
             c['data']['crop'].update(main_path_matlab=self.positive(self.train_center.get()),already_cropped=self.train_cropped.get(),allow_short=self.train_short.get())
             c['model']['layers']=self.positive(self.layers.get())
             c['training'].update(epochs=self.positive(self.epochs.get()),batch_size=self.positive(self.batch.get()),
-                                 mode='all_data',target_metric='MeanCodedBER',output=str(self.new_path(self.train_output.get(),stamp)))
+                                 mode='holdout',target_metric='MeanCodedBER',output=str(self.new_path(self.train_output.get(),stamp)))
             if c['data']['fields']['ber']!='mean_coded_ber':raise ValueError('当前工作台只训练MeanCodedBER，请核对配置的标签字段。')
-            return dict(action='train',config=c)
+            return dict(action='train',config=c,split_ratio=[.7,.2,.1])
         checkpoint=self.checkpoint.get().strip()
         if not Path(checkpoint).is_file():raise ValueError('请选择已训练好的模型；新电脑需先训练。')
         if mode==2:

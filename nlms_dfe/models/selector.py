@@ -22,6 +22,8 @@ class ParameterSelector(nn.Module):
         self.channel = ChannelEncoder(FEATURE_COUNTS[config["data"]["features"]], model)
         self.scalars = nn.Sequential(nn.Linear(2, 32), nn.GELU(), nn.Linear(32, 64), nn.GELU())
         self.conditioning = model["snr_conditioning"]
+        self.use_snr = model.get("use_snr", True)
+        self.use_channel_power = model.get("use_channel_power", True)
         if self.conditioning not in {"film", "concat"}:
             raise ValueError("snr_conditioning 必须为 film 或 concat。")
         self.film = nn.Linear(64, width * 2)
@@ -37,7 +39,15 @@ class ParameterSelector(nn.Module):
 
     def forward(self, x, scalars, padding_mask):
         z = self.channel(x, padding_mask)
-        condition = self.scalars((scalars - self.scalar_mean) / self.scalar_std)
+        normalized = (scalars - self.scalar_mean) / self.scalar_std
+        # 消融时固定为训练均值，即该条件变量不向决策提供样本差异。
+        if not self.use_snr:
+            normalized = normalized.clone()
+            normalized[:, 0] = 0
+        if not self.use_channel_power:
+            normalized = normalized.clone()
+            normalized[:, 1] = 0
+        condition = self.scalars(normalized)
         if self.conditioning == "film":
             gamma, beta = self.film(condition).chunk(2, dim=-1)
             z = z * (1 + gamma) + beta

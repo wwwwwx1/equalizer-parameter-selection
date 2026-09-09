@@ -17,15 +17,17 @@ class ResidualDelayBlock(nn.Module):
 
 
 class DelayCNN(nn.Module):
-    def __init__(self, input_channels, d_model, delay_bins):
+    def __init__(self, input_channels, d_model, delay_bins, residual=True):
         super().__init__()
+        def maybe_residual(width):
+            return ResidualDelayBlock(width) if residual else nn.Identity()
         self.conv = nn.Sequential(
             nn.Conv1d(input_channels, 32, 5, padding=2, stride=2), nn.GroupNorm(4, 32), nn.GELU(),
-            ResidualDelayBlock(32),
+            maybe_residual(32),
             nn.Conv1d(32, 64, 5, padding=2, stride=2), nn.GroupNorm(4, 64), nn.GELU(),
-            ResidualDelayBlock(64),
+            maybe_residual(64),
             nn.Conv1d(64, 96, 3, padding=1, stride=2), nn.GroupNorm(4, 96), nn.GELU(),
-            ResidualDelayBlock(96), nn.AdaptiveAvgPool1d(delay_bins))
+            maybe_residual(96), nn.AdaptiveAvgPool1d(delay_bins))
         # 保留有序时延分箱，避免全局均值抹掉主径前后能量位置。
         self.project = nn.Linear(96 * delay_bins, d_model)
 
@@ -39,7 +41,15 @@ class ChannelEncoder(nn.Module):
         width = config["d_model"]
         if width % 2 or width % config["heads"]:
             raise ValueError("d_model 必须是偶数且能被 heads 整除。")
-        self.delay = DelayCNN(input_channels, width, config["delay_bins"])
+        self.delay_encoder = config.get("delay_encoder", "cnn")
+        if self.delay_encoder == "cnn":
+            self.delay = DelayCNN(input_channels, width, config["delay_bins"], config.get("delay_residual", True))
+        elif self.delay_encoder == "pool":
+            # 消融：只压缩原始时延特征，没有可学习的局部卷积。
+            self.delay = nn.Sequential(nn.AdaptiveAvgPool1d(config["delay_bins"]), nn.Flatten(1),
+                                       nn.Linear(input_channels * config["delay_bins"], width))
+        else:
+            raise ValueError("delay_encoder 必须为 cnn 或 pool。")
         # 分别构造各层，避免复制同一层初始化值。
         self.temporal = nn.ModuleList([
             nn.TransformerEncoderLayer(width, config["heads"], config["ffn_dim"],

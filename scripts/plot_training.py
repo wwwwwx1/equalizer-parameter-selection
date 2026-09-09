@@ -14,6 +14,7 @@ def plot(output):
         rows=list(csv.DictReader(file))
     if not rows:
         raise ValueError('训练日志没有数据。')
+    prefix='val' if 'val_selected_ber' in rows[0] else 'fit'
     values=lambda key:np.array([float(r[key]) for r in rows])
     plt.rcParams.update({'font.family':'sans-serif','font.sans-serif':['Microsoft YaHei','SimHei','DejaVu Sans'],
                          'font.size':10,'axes.unicode_minus':False,'pdf.fonttype':42,'svg.fonttype':'none'})
@@ -26,16 +27,16 @@ def plot(output):
     axes[0,0].axvline(warmup+.5,color='gray',ls=':',label='Loss stage changes')
     axes[0,0].legend()
     for key,label,style in [('fit_selected_ber','Network','-'),('fixed_ber','Fixed','--'),('grid_best_ber','Grid minimum',':')]:
-        axes[0,1].plot(epoch,values(key)*100,style,label=label)
-    axes[0,1].set(title='Training MeanCodedBER',xlabel='Epoch',ylabel='BER (%)')
+        axes[0,1].plot(epoch,values(key.replace('fit_',prefix+'_'))*100,style,label=label)
+    axes[0,1].set(title=('Validation' if prefix=='val' else 'Training')+' MeanCodedBER',xlabel='Epoch',ylabel='BER (%)')
     axes[0,1].legend()
-    axes[1,0].plot(epoch,values('fit_top1')*100,label='Top-1')
-    axes[1,0].plot(epoch,values('fit_top3')*100,label='Top-3')
+    axes[1,0].plot(epoch,values(prefix+'_top1')*100,label='Top-1')
+    axes[1,0].plot(epoch,values(prefix+'_top3')*100,label='Top-3')
     axes[1,0].set(title='Tie-aware grid-best recovery',xlabel='Epoch',ylabel='Hit rate (%)',ylim=(0,100))
     axes[1,0].legend()
-    axes[1,1].plot(epoch,values('fit_regret'))
-    axes[1,1].set(title='Training regret',xlabel='Epoch',ylabel='Selected BER - grid minimum')
-    fig.suptitle('MeanCodedBER | All data used for training | No held-out evaluation',fontsize=13)
+    axes[1,1].plot(epoch,values(prefix+'_regret'))
+    axes[1,1].set(title=('Validation' if prefix=='val' else 'Training')+' regret',xlabel='Epoch',ylabel='Selected BER - grid minimum')
+    fig.suptitle('MeanCodedBER | '+('Validation curves; test evaluated separately' if prefix=='val' else 'Training fit; no held-out evaluation'),fontsize=13)
     folder=output/'figures';folder.mkdir(exist_ok=True)
     for ext in ('png','pdf','svg'):
         fig.savefig(folder/f'training_curves.{ext}',dpi=300)
