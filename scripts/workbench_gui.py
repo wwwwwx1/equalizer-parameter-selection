@@ -61,6 +61,9 @@ class Workbench:
         self.run_button=ttk.Button(buttons,text='开始当前页任务',command=self.start);self.run_button.pack(side='left')
         self.open_button=ttk.Button(buttons,text='打开本次结果',command=self.open_output,state='disabled');self.open_button.pack(side='left',padx=12)
         ttk.Button(buttons,text='打开日志目录',command=self.open_logs).pack(side='left')
+        for label,action in [('暂停','pause'),('继续','run'),('保存并停止','stop')]:
+            ttk.Button(buttons,text=label,command=lambda value=action:self.training_control(value)).pack(side='left',padx=3)
+        ttk.Button(buttons,text='中途曲线',command=self.training_curves).pack(side='left',padx=3)
         self.status=tk.StringVar(value='选择上方模式，填写设置，再点击开始。新电脑可选择已有Python，无需在线安装。')
         panel=ttk.Frame(frame);panel.grid(row=4,column=0,columnspan=3,sticky='ew',pady=10)
         panel.columnconfigure(0,weight=1)
@@ -77,6 +80,8 @@ class Workbench:
         install(self)
         from scripts.workbench_ablation import install as install_ablation
         install_ablation(self)
+        from scripts.workbench_diagnostics import install as install_diagnostics
+        install_diagnostics(self)
         root.geometry(f"1100x{min(960,max(780,root.winfo_screenheight()-100))}")
 
     def entry(self,parent,row,label,var,kind=None):
@@ -117,6 +122,8 @@ class Workbench:
             ttk.Checkbutton(options,text=label,variable=var).pack(side='left',padx=(0,12))
         ttk.Button(p,text='读取配置并更新本页',command=self.load_train_config).grid(row=6,column=0,sticky='w',pady=4)
         ttk.Label(p,text='数据已准备好时，可直接在本页训练；自动按来源组7:2:1划分，显示扫描、训练和验证进度。').grid(row=6,column=1,columnspan=2,sticky='w')
+        self.resume_path=tk.StringVar()
+        self.entry(p,7,'断点last.pt（留空为新训练）',self.resume_path,'file')
         self.assign_config(self.config)
 
     def assign_config(self,c):
@@ -176,6 +183,11 @@ class Workbench:
             c['data']['crop'].update(main_path_matlab=self.positive(self.pre_center.get()),already_cropped=self.pre_cropped.get(),allow_short=self.pre_short.get())
             return dict(action='prepare',source=source,config=c)
         if mode==1:
+            if self.resume_path.get().strip():
+                resume=Path(self.resume_path.get().strip())
+                c=read_config(resume.parent/'config.json')
+                c['training'].update(resume=str(resume),output=str(self.new_path(self.train_output.get(),stamp)))
+                return dict(action='train',config=c)
             if not Path(self.manifest.get()).is_file() or not Path(self.candidates.get()).is_file():raise ValueError('请先准备数据，或选择有效索引与候选CSV。')
             c['data'].update(manifest=self.manifest.get(),candidates=self.candidates.get(),cache_features=self.cache.get())
             c['data']['crop'].update(main_path_matlab=self.positive(self.train_center.get()),already_cropped=self.train_cropped.get(),allow_short=self.train_short.get())
@@ -223,6 +235,9 @@ class Workbench:
             python=self.python.get().strip()
             if not Path(python).is_file():raise ValueError('请选择已有环境里的python.exe。')
             job=self.job()
+            self.active_job=job
+            self.control_path=ROOT/'outputs/ui_logs'/('control_'+datetime.now().strftime('%Y%m%d_%H%M%S_%f')+'.json')
+            write_json(self.control_path,{'action':'run'})
             logs=ROOT/'outputs/ui_logs';logs.mkdir(parents=True,exist_ok=True)
             stamp=datetime.now().strftime('%Y%m%d_%H%M%S_%f')
             self.job_path=logs/f'{stamp}.json';write_json(self.job_path,job)
@@ -234,11 +249,15 @@ class Workbench:
         self.current_round=''
         self.phase='启动后台进程';self.bar['value']=0;self.run_button.configure(state='disabled');self.open_button.configure(state='disabled')
         self.log.configure(state='normal');self.log.delete('1.0','end');self.log.configure(state='disabled')
+        if job.get('action') in ('train','ablation'):
+            settings=job['config']['training']
+            self.append_log(f"本次实际训练设置：{settings['epochs']}轮，每批{settings['batch_size']}个样本。配置快照：{self.job_path}\n")
+            self.append_log('启动后修改输入框只影响下次任务；本次设置不会自动改变。\n')
         threading.Thread(target=self.worker,args=(python,self.job_path,self.log_path,self.progress_path),daemon=True).start()
 
     def worker(self,python,job_path,log_path,progress_path):
         try:
-            env=os.environ.copy();env.update(PYTHONUTF8='1',PYTHONUNBUFFERED='1',NLMS_UI_EVENTS='1',NLMS_PROGRESS_FILE=str(progress_path))
+            env=os.environ.copy();env.update(NLMS_CONTROL_FILE=str(self.control_path),PYTHONUTF8='1',PYTHONUNBUFFERED='1',NLMS_UI_EVENTS='1',NLMS_PROGRESS_FILE=str(progress_path))
             flags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0
             with log_path.open('w',encoding='utf-8') as file:
                 process=subprocess.Popen([python,'-X','utf8','-u','-m','scripts.workbench_job',str(job_path)],cwd=ROOT,
@@ -297,6 +316,20 @@ class Workbench:
         elif item['action']=='single':
             p=item['prediction'];self.answer.set(f"μ = {p['mu']:.7g}    N1 = {p['N1']}    N2 = {p['N2']}")
             self.matlab=f"mu = {p['mu']:.7g};\nN1 = {p['N1']};\nN2 = {p['N2']};";self.copy_button.configure(state='normal')
+
+    def training_control(self,action):
+        if not self.running or self.active_job.get('action') not in ('train','ablation'):
+            messagebox.showinfo('训练控制','当前没有正在运行的训练任务。');return
+        write_json(self.control_path,{'action':action})
+        self.append_log({'pause':'已请求暂停，将在批次边界生效。','run':'已请求继续。','stop':'已请求停止；保留最近完整轮次，未完成轮次续训时重跑。'}[action]+'\n')
+
+    def training_curves(self):
+        from scripts.live_training_curves import show
+        path=filedialog.askdirectory(title='选择本次训练输出目录（含training_history.csv或batch_history.csv）')
+        if path:
+            show(self.root,Path(path))
+            from scripts.diagnostic_plots import show as show_diagnostics
+            show_diagnostics(self.root,Path(path))
 
     def copy_parameters(self):self.root.clipboard_clear();self.root.clipboard_append(self.matlab)
     def open_output(self):

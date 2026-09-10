@@ -1,0 +1,11 @@
+{
+  "checkpoint": "",
+  "channels": "",
+  "results": "",
+  "output": "测试完成模型/测试结果",
+  "main_path": 501,
+  "already_cropped": false,
+  "allow_short": false,
+  "fixed_parameters": null,
+  "device": "auto"
+}

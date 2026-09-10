@@ -7,6 +7,9 @@ from nlms_dfe.progress import event
 
 def run(job):
     action=job['action']
+    if action in ('train','ablation'):
+        settings=job['config']['training']
+        print(f"后台收到训练配置：epochs={settings['epochs']}, batch_size={settings['batch_size']}",flush=True)
     if action=='ablation':
         from scripts.ablation_workbench import run as run_ablation
         return run_ablation(job)
@@ -39,6 +42,7 @@ def run(job):
             config['data']['manifest']=str(manifest)
             config['training']['mode']='holdout'
         checkpoint=train(config)
+        if checkpoint is None:return {'action':'stopped','output':config['training']['output'],'message':'训练已停止；last.pt保留最近完整轮次，可断点续训。'}
         metrics=None
         if config['training'].get('mode')=='holdout':
             from nlms_dfe.training.engine import evaluate

@@ -50,6 +50,7 @@ def child(path):
     from scripts.plot_training import plot
     task=read_config(path); c=task['config']; folder=Path(c['training']['output'])
     checkpoint=train(c)
+    if checkpoint is None:return
     metrics=evaluate(checkpoint,folder/'evaluation') if c['training']['mode']=='holdout' else read_config(folder/'training_fit_metrics.json')
     plot(folder)
     write_json(folder/'result.json',dict(checkpoint=str(checkpoint),metrics=metrics,scope='组外测试' if c['training']['mode']=='holdout' else '训练拟合'))
@@ -65,7 +66,7 @@ def run(job):
         try:
             with (out/(task['id']+'.log')).open('w',encoding='utf-8') as log:
                 p=subprocess.run([sys.executable,'-X','utf8','-u','-m','scripts.ablation_workbench','--child',str(spec)],cwd=ROOT,env=env,stdout=log,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW if os.name=='nt' else 0)
-            write_json(status,{'status':'完成' if p.returncode==0 else '失败','exit_code':p.returncode})
+            write_json(status,{'status':('已停止' if (Path(task['config']['training']['output'])/'stopped.json').exists() else '完成') if p.returncode==0 else '失败','exit_code':p.returncode})
         except Exception as e:write_json(status,{'status':'失败','error':str(e)})
     with ThreadPoolExecutor(max_workers=job['concurrency']) as pool:list(pool.map(execute,tasks))
     records=[]

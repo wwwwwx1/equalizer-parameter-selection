@@ -41,6 +41,9 @@ def plot(output):
     for ext in ('png','pdf','svg'):
         fig.savefig(folder/f'training_curves.{ext}',dpi=300)
     plt.close(fig)
+    if (output/'diagnostic_history.csv').exists():
+        from scripts.diagnostic_plots import export
+        export(output)
     print('训练图：',folder)
 
 

@@ -23,7 +23,9 @@
     "features": "ri_abs_phase",
     "temporal_pool": 16,
     "phase_power_floor": 1e-06,
-    "cache_features": false
+    "cache_features": false,
+    "reuse_training_statistics": true,
+    "training_statistics_cache_dir": "cache/training_statistics"
   },
   "model": {
     "kind": "scorer",
@@ -44,7 +46,8 @@
     "regret_weight": 1.0,
     "rank_weight": 0.05,
     "rank_pairs": 256,
-    "warmup_epochs": 3
+    "warmup_epochs": 3,
+    "loss_ramp_epochs": 5
   },
   "training": {
     "seed": 42,
@@ -53,12 +56,17 @@
     "workers": 0,
     "learning_rate": 0.0005,
     "weight_decay": 0.001,
+    "lr_schedule": "plateau",
+    "lr_factor": 0.5,
+    "lr_patience": 3,
+    "min_learning_rate": 0.000001,
     "gradient_clip": 1.0,
     "patience": 20,
     "amp": true,
     "device": "auto",
     "output": "outputs/new_training",
     "cpu_threads": 4,
+    "monitor_samples": 128,
     "mode": "all_data",
     "target_metric": "MeanCodedBER"
   },

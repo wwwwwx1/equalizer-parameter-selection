@@ -10,12 +10,19 @@ from nlms_dfe.common import ROOT,read_config,write_json,project_path
 
 
 DESCRIPTIONS={'layers':'时间Transformer层数','d_model':'每个时间token的特征宽度','heads':'注意力头数，需要整除d_model',
+              'monitor_samples':'固定训练监测子集大小，0为全训练集；默认128。越大每轮评估越慢。',
               'ffn_dim':'Transformer前馈隐藏维度','delay_bins':'时延池化分箱数','candidate_dim':'候选参数表示维度',
               'dropout':'丢弃比例，范围0至1','temporal_pool':'每多少行时间特征合并一次','learning_rate':'初始学习率',
               'weight_decay':'AdamW权重衰减','batch_size':'每批信道数','epochs':'训练轮次',
               'score_weight':'性能差距回归权重','soft_weight':'软标签权重','regret_weight':'期望regret权重',
               'rank_weight':'排序损失权重','temperature':'软标签温度','warmup_epochs':'仅回归预热轮数',
+              'loss_ramp_epochs':'附加损失从0平滑增加到完整权重的轮数',
+              'lr_schedule':'学习率策略：plateau按验证BER下降，cosine平滑衰减，constant固定',
+              'lr_factor':'plateau触发后的学习率乘数','lr_patience':'验证BER连续未改善多少轮后降学习率',
+              'min_learning_rate':'学习率下限',
               'main_path_matlab':'原始信道主径的一基列号','cache_features':'大数据集建议关闭',
+              'reuse_training_statistics':'复用同一训练集的SNR/能量统计和固定参数基线；数据或裁剪变化会自动失效',
+              'training_statistics_cache_dir':'训练统计缓存目录（相对项目根目录）',
               'features':'ri / abs / ri_abs / ri_abs_phase'}
 
 
@@ -30,6 +37,8 @@ def validate_model_config(c):
     if m['snr_conditioning'] not in ('film','concat'):raise ValueError('条件化方式应为film或concat。')
     if d['features'] not in ('ri','abs','ri_abs','ri_abs_phase'):raise ValueError('未知信道特征组合。')
     if t['learning_rate']<=0 or c['loss']['temperature']<=0 or c['loss']['scale_floor']<=0:raise ValueError('学习率、温度和scale_floor需大于0。')
+    if c['loss'].get('loss_ramp_epochs',1)<1:raise ValueError('loss_ramp_epochs需为正整数。')
+    if t.get('lr_schedule','plateau') not in ('plateau','cosine','constant'):raise ValueError('lr_schedule应为plateau、cosine或constant。')
     if c['data']['fields']['ber']!='mean_coded_ber' or t['target_metric']!='MeanCodedBER':raise ValueError('当前工作台训练目标为MeanCodedBER。')
     json.dumps(c,allow_nan=False)
 
